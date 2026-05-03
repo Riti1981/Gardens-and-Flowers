@@ -1,294 +1,150 @@
 import javax.swing.*;
 import java.awt.*;
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Scanner;
 
-class Flower {
-    private String name;
-    private String description;
-    private boolean watered;
+public class FlowerBouquetGame extends JFrame {
 
-    public Flower(String name, String description) {
-        this.name = name;
-        this.description = description;
-        this.watered = false;
-    }
+    private JPanel leftPanel, rightPanel;
+    private JLabel infoLabel, flowerImageLabel;
+    private JButton addButton;
 
-    public String getName() { return name; }
-    public String getDescription() { return description; }
-    public boolean isWatered() { return watered; }
-    public void water() { watered = true; }
-}
+    private DefaultListModel<String> bouquetModel;
+    private JList<String> bouquetList;
 
-class GameModel {
-    private ArrayList<Flower> flowers;
-    private ArrayList<Flower> bouquetFlowers;
-    private int currentFlowerIndex;
+    private ArrayList<Flower> flowers = new ArrayList<>();
+    private Flower selectedFlower = null;
 
-    public GameModel() {
-        flowers = new ArrayList<>();
-        bouquetFlowers = new ArrayList<>();
-        currentFlowerIndex = 0;
-        loadFlowers();
-    }
+    public FlowerBouquetGame() {
+        setTitle("Wildflower Bouquet Builder");
+        setSize(850, 650);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout(10, 10));
 
-    private void loadFlowers() {
-        flowers.add(new Flower("California Poppy",
-                "Bright orange petals fading into yellow, cup-shaped. Found in West Coast/Southwest US. " +
-                "Grows in sandy soil, full sun. Easy to grow and self-seeds."));
+        loadFlowerData();
 
-        flowers.add(new Flower("Yarrow",
-                "Feathery foliage with white flowers (May–June). Great for pollinators, drought-tolerant, " +
-                "helps erosion control, and uses less water."));
+        // LEFT PANEL: Flower image and info only
+        leftPanel = new JPanel();
+        leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
+        leftPanel.setPreferredSize(new Dimension(520, 650));
 
-        flowers.add(new Flower("Sunflower",
-                "Bright yellow petals with a brown center. Very drought-tolerant, attracts pollinators, " +
-                "can grow year-round."));
+        flowerImageLabel = new JLabel("Select a flower to see its picture.");
+        flowerImageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        flowerImageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        flowerImageLabel.setPreferredSize(new Dimension(450, 300));
+        flowerImageLabel.setMaximumSize(new Dimension(450, 300));
+        flowerImageLabel.setBorder(BorderFactory.createEmptyBorder(20, 0, 10, 0));
+        leftPanel.add(flowerImageLabel);
 
-        flowers.add(new Flower("Blue Flax",
-                "Rare true blue flower with 5 petals. Drought-tolerant, eco-friendly, supports pollinators, " +
-                "helps with erosion control."));
+        infoLabel = new JLabel("<html><div style='text-align:center; width:400px;'>Select a flower to learn more!</div></html>");
+        infoLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        infoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        infoLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 20, 10));
+        leftPanel.add(infoLabel);
 
-        flowers.add(new Flower("Chuparosa",
-                "Shrub with many red flowers. Attracts hummingbirds and butterflies. " +
-                "Drought-tolerant, supports ecosystems, helps water conservation."));
+        addButton = new JButton("Add to Bouquet");
+        addButton.setEnabled(false);
+        addButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        addButton.setBackground(new Color(255, 215, 0));
+        addButton.addActionListener(e -> addToBouquet());
+        leftPanel.add(addButton);
 
-        flowers.add(new Flower("Arroyo Lupine",
-                "Purple-blue spike flowers. Fixes nitrogen in soil, supports butterflies and moths, " +
-                "grows in many soil types."));
+        add(leftPanel, BorderLayout.WEST);
 
-        flowers.add(new Flower("Winecup Clarkia",
-                "Light pink/lavender petals with dark center. Found across California (except desert). " +
-                "Small annual flower that attracts pollinators."));
-    }
+        // RIGHT PANEL: Flower buttons and bouquet list
+        rightPanel = new JPanel();
+        rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.Y_AXIS));
+        rightPanel.setBorder(BorderFactory.createEmptyBorder(20, 10, 10, 20));
 
-    public ArrayList<Flower> getFlowers() { return flowers; }
-    public ArrayList<Flower> getBouquetFlowers() { return bouquetFlowers; }
+        JLabel title = new JLabel("Pick Your Flowers:");
+        title.setFont(new Font("Arial", Font.BOLD, 16));
+        rightPanel.add(title);
 
-    public Flower getCurrentFlower() {
-        if (currentFlowerIndex < flowers.size()) return flowers.get(currentFlowerIndex);
-        return null;
-    }
+        for (Flower f : flowers) {
+            JButton btn = new JButton(f.name);
+            btn.setMaximumSize(new Dimension(230, 32));
+            btn.addActionListener(e -> displayFlower(f));
 
-    public int getCurrentFlowerIndex() { return currentFlowerIndex; }
-
-    public void waterNextFlower() {
-        if (currentFlowerIndex < flowers.size()) {
-            flowers.get(currentFlowerIndex).water();
-            currentFlowerIndex++;
+            rightPanel.add(Box.createRigidArea(new Dimension(0, 6)));
+            rightPanel.add(btn);
         }
+
+        rightPanel.add(Box.createRigidArea(new Dimension(0, 25)));
+        rightPanel.add(new JLabel("Your Bouquet:"));
+
+        bouquetModel = new DefaultListModel<>();
+        bouquetList = new JList<>(bouquetModel);
+
+        JScrollPane scroll = new JScrollPane(bouquetList);
+        scroll.setPreferredSize(new Dimension(230, 220));
+        rightPanel.add(scroll);
+
+        add(rightPanel, BorderLayout.CENTER);
     }
 
-    public boolean allFlowersWatered() {
-        return currentFlowerIndex >= flowers.size();
-    }
+    private void loadFlowerData() {
+        try {
+            File file = new File("flower.txt");
+            Scanner scanner = new Scanner(file);
 
-    public void addToBouquet(Flower flower) {
-        if (!bouquetFlowers.contains(flower)) bouquetFlowers.add(flower);
-    }
+            while (scanner.hasNextLine()) {
+                String name = scanner.nextLine().trim();
+                if (name.isEmpty()) continue;
 
-    public void clearBouquet() {
-        bouquetFlowers.clear();
-    }
-}
+                String desc = scanner.nextLine().trim();
+                String img = scanner.nextLine().trim();
 
-class GardenPanel extends JPanel {
-    private GameModel model;
-    private boolean showCan;
-
-    public GardenPanel(GameModel model) {
-        this.model = model;
-        setPreferredSize(new Dimension(700, 400));
-        setBackground(new Color(210, 240, 210));
-    }
-
-    public void showCan() { showCan = true; repaint(); }
-    public void hideCan() { showCan = false; repaint(); }
-
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-
-        ArrayList<Flower> flowers = model.getFlowers();
-        int groundY = 300;
-        int w = getWidth() / flowers.size();
-
-        g.setColor(new Color(110, 70, 35));
-        g.fillRect(0, groundY, getWidth(), 80);
-
-        for (int i = 0; i < flowers.size(); i++) {
-            int x = i * w + w / 2;
-
-            g.setColor(Color.GREEN);
-            g.fillRect(x - 5, groundY - 70, 10, 70);
-
-            if (flowers.get(i).isWatered()) {
-                g.setColor(Color.PINK);
-                g.fillOval(x - 15, groundY - 90, 30, 30);
-            } else {
-                g.setColor(Color.GREEN.darker());
-                g.fillOval(x - 10, groundY - 50, 20, 10);
+                flowers.add(new Flower(name, desc, img));
             }
 
-            g.setColor(Color.BLACK);
-            g.drawString(flowers.get(i).getName(), x - 40, groundY + 20);
-        }
+            scanner.close();
 
-        if (showCan && !model.allFlowersWatered()) {
-            int index = model.getCurrentFlowerIndex();
-            int x = index * w + w / 2;
-
-            g.setColor(Color.BLUE);
-            g.fillRect(x - 30, 60, 60, 30);
-            g.drawString("Watering", x - 30, 50);
-        }
-
-        if (model.allFlowersWatered()) {
-            g.setFont(new Font("Arial", Font.BOLD, 24));
-            g.drawString("All flowers have bloomed!", 200, 50);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error loading flower.txt");
         }
     }
-}
 
-class BouquetPanel extends JPanel {
-    private GameModel model;
+    private void displayFlower(Flower f) {
+        selectedFlower = f;
 
-    public BouquetPanel(GameModel model) {
-        this.model = model;
-        setPreferredSize(new Dimension(300, 400));
-        setBackground(new Color(255, 245, 230));
+        infoLabel.setText("<html><div style='text-align:center; width:400px;'>" +
+                "<b>" + f.name + "</b><br><br>" + f.description +
+                "</div></html>");
+
+        ImageIcon icon = new ImageIcon(f.imagePath);
+
+        if (icon.getIconWidth() > 0) {
+            Image img = icon.getImage().getScaledInstance(260, 260, Image.SCALE_SMOOTH);
+            flowerImageLabel.setIcon(new ImageIcon(img));
+            flowerImageLabel.setText("");
+        } else {
+            flowerImageLabel.setIcon(null);
+            flowerImageLabel.setText("[ Image not found: " + f.imagePath + " ]");
+        }
+
+        addButton.setEnabled(true);
     }
 
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-
-        g.setColor(new Color(230, 200, 160));
-        g.fillRect(60, 100, 180, 200);
-
-        int x = 90;
-        int y = 130;
-
-        for (Flower f : model.getBouquetFlowers()) {
-            g.setColor(Color.PINK);
-            g.fillOval(x, y, 20, 20);
-            g.drawString(f.getName(), x - 10, y + 40);
-
-            x += 40;
-            if (x > 200) {
-                x = 90;
-                y += 60;
-            }
+    private void addToBouquet() {
+        if (selectedFlower != null) {
+            bouquetModel.addElement(selectedFlower.name);
         }
     }
-}
 
-class FlowerInfoPanel extends JPanel {
-    private JLabel name;
-    private JTextArea desc;
+    static class Flower {
+        String name, description, imagePath;
 
-    public FlowerInfoPanel() {
-        setLayout(new BorderLayout());
-        name = new JLabel("Water a flower to learn about it");
-        desc = new JTextArea(4, 40);
-        desc.setLineWrap(true);
-        desc.setWrapStyleWord(true);
-        desc.setEditable(false);
-
-        add(name, BorderLayout.NORTH);
-        add(desc, BorderLayout.CENTER);
-    }
-
-    public void showFlower(Flower f) {
-        name.setText(f.getName());
-        desc.setText(f.getDescription());
-    }
-
-    public void showDone() {
-        name.setText("Garden Complete!");
-        desc.setText("Now select flowers to build your bouquet.");
-    }
-}
-
-public class GardenFlowerGUI extends JFrame {
-    private GameModel model;
-    private GardenPanel garden;
-    private BouquetPanel bouquet;
-    private FlowerInfoPanel info;
-
-    public GardenFlowerGUI() {
-        model = new GameModel();
-
-        setTitle("Flower Garden Project");
-        setSize(1000, 600);
-        setLayout(new BorderLayout());
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-
-        garden = new GardenPanel(model);
-        bouquet = new BouquetPanel(model);
-        info = new FlowerInfoPanel();
-
-        JButton waterBtn = new JButton("Water Next Flower");
-        JButton addBtn = new JButton("Add to Bouquet");
-        JButton clearBtn = new JButton("Clear Bouquet");
-
-        String[] names = model.getFlowers().stream().map(Flower::getName).toArray(String[]::new);
-        JList<String> list = new JList<>(names);
-        list.setEnabled(false);
-
-        waterBtn.addActionListener(e -> {
-            Flower f = model.getCurrentFlower();
-            if (f != null) {
-                garden.showCan();
-
-                Timer t = new Timer(600, ev -> {
-                    model.waterNextFlower();
-                    info.showFlower(f);
-                    garden.hideCan();
-                    garden.repaint();
-
-                    if (model.allFlowersWatered()) {
-                        waterBtn.setEnabled(false);
-                        list.setEnabled(true);
-                        info.showDone();
-                    }
-                });
-                t.setRepeats(false);
-                t.start();
-            }
-        });
-
-        addBtn.addActionListener(e -> {
-            int i = list.getSelectedIndex();
-            if (i != -1) {
-                model.addToBouquet(model.getFlowers().get(i));
-                bouquet.repaint();
-            }
-        });
-
-        clearBtn.addActionListener(e -> {
-            model.clearBouquet();
-            bouquet.repaint();
-        });
-
-        JPanel left = new JPanel(new BorderLayout());
-        left.add(new JScrollPane(list), BorderLayout.CENTER);
-        left.add(addBtn, BorderLayout.SOUTH);
-
-        JPanel top = new JPanel();
-        top.add(waterBtn);
-
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.add(info, BorderLayout.CENTER);
-        bottom.add(clearBtn, BorderLayout.EAST);
-
-        add(top, BorderLayout.NORTH);
-        add(left, BorderLayout.WEST);
-        add(garden, BorderLayout.CENTER);
-        add(bouquet, BorderLayout.EAST);
-        add(bottom, BorderLayout.SOUTH);
-
-        setVisible(true);
+        Flower(String n, String d, String i) {
+            name = n;
+            description = d;
+            imagePath = i;
+        }
     }
 
     public static void main(String[] args) {
-        new GardenFlowerGUI();
+        SwingUtilities.invokeLater(() -> {
+            new FlowerBouquetGame().setVisible(true);
+        });
     }
 }
